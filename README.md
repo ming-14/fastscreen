@@ -2,6 +2,8 @@
 
 高性能 Windows 截屏库，C++ 核心 + Python 绑定，支持 DXGI / WGC / BitBlt 三级捕获策略。
 
+![CI](https://github.com/ming-14/fastscreen/actions/workflows/ci.yml/badge.svg)
+
 ## 特性
 
 - **三级捕获策略**：DXGI Desktop Duplication → Windows Graphics Capture → BitBlt，自动选择最优方法
@@ -19,14 +21,34 @@
 - MSVC 2019+ / Visual Studio Build Tools
 - CMake 3.16+
 
+## 架构支持
+
+| 架构 | VS 平台 | SIMD | 说明 |
+|------|---------|------|------|
+| **AMD64 (x64)** | `x64` | AVX2 | 默认架构，`build.py` 默认构建 |
+| **x86 (32位)** | `Win32` | AVX2 | `--arch x86` |
+| **ARM64** | `ARM64` | NEON | `--arch arm64`，构建/运行均原生支持 |
+
+DLL 按架构安装到 `fastscreencore/<arch>/`，Python 绑定层按运行平台自动加载对应架构。
+
 ## 构建
 
 ```bash
-python build.py         # 编译 C++ DLL 并安装到 fastscreencore/ 包目录
-python build.py clean   # 清理构建产物
-python -m pytest tests/ -v   # 运行测试
-python gui/main.py           # 启动 PySide6 GUI
+python build.py               # 编译当前平台架构的 Release DLL
+python build.py --arch x86    # 指定目标架构（x64 / x86 / arm64）
+python build.py clean         # 清理构建产物
+python -m pytest tests/ -v    # 运行测试
+python gui/main.py            # 启动 PySide6 GUI
 ```
+
+## CI 与 Release
+
+GitHub Actions（`.github/workflows/ci.yml`）：
+- **构建 + 测试**：push / PR 时并行构建 x64 / x86 / arm64
+  - x64、x86 运行对应架构的 pytest（x86 使用 32 位 Python 加载 x86 DLL）
+  - ARM64 仅交叉编译验证（GH Actions 无 ARM64 Windows runner，无法运行测试）
+- **自动 Release**：推送 `v*` 标签时自动发布，附带三个架构的 DLL
+  - `fastscreen-win-x86_64.dll` / `fastscreen-win-x86.dll` / `fastscreen-win-arm64.dll`
 
 ## 快速开始
 
@@ -75,7 +97,7 @@ engine.stop_continuous()
 ## GUI
 
 ```bash
-python build.py gui
+python gui/main.py
 ```
 
 - F5：单帧截图
@@ -91,8 +113,9 @@ fastscreen/
 ├── fastscreen.def        # DLL 导出定义
 ├── fastscreencore/       # Python 绑定包（绑定层源码，编译后含 fastscreen.dll）
 │   ├── __init__.py
-│   ├── _core.py          # ctypes 绑定层（C ABI 声明、DLL 加载）
-│   └── capture.py        # 高级 API（CaptureEngine、CapturedFrame）
+│   ├── _core.py          # ctypes 绑定层（C ABI 声明、按架构加载 DLL）
+│   ├── capture.py        # 高级 API（CaptureEngine、CapturedFrame）
+│   └── <arch>/           # 构建产物 fastscreen.dll（x64 / x86 / arm64 子目录）
 ├── gui/                  # PySide6 GUI 测试工具
 │   ├── main.py
 │   ├── main_window.py
@@ -111,7 +134,7 @@ fastscreen/
 └── tests/                # pytest 测试
 ```
 
-Python 绑定层（`fastscreencore`：`_core.py` + `capture.py` + `fastscreen.dll`）位于仓库根 `fastscreencore/`，DLL 由 `build.py` 编译后自动安装到该目录。
+Python 绑定层（`fastscreencore`：`_core.py` + `capture.py` + 各架构的 `fastscreen.dll`）位于仓库根 `fastscreencore/`，DLL 由 `build.py` 编译后按架构安装到 `fastscreencore/<arch>/`。
 
 ## 测试
 

@@ -34,7 +34,6 @@ def encode_bgra_to_image(bgra_data: bytes, width: int, height: int, stride: int,
     frame.height = height
     frame.stride = stride
     frame.bpp = 4
-    frame.format = 0
     frame.data = ctypes.cast(c_ptr, ctypes.POINTER(ctypes.c_uint8))
     frame.owns_data = 0
     frame.timestamp_ms = 0
@@ -379,7 +378,8 @@ class CaptureEngine:
             logger.error("continuous frame callback error: %s", e)
 
     def __del__(self):
-        if self._session_id is not None:
+        session_id = getattr(self, "_session_id", None)
+        if session_id is not None:
             try:
                 self.stop_continuous()
             except Exception:

@@ -1,10 +1,7 @@
-import os
-import sys
 import ctypes
 import platform
-from ctypes import wintypes
 from pathlib import Path
-from typing import Optional, List, Callable
+from typing import Optional
 
 class MonitorInfo(ctypes.Structure):
     _fields_ = [
@@ -68,28 +65,43 @@ class ErrorCode:
     ALREADY_RUNNING = -7
     NOT_RUNNING = -8
 
+def _arch_dir() -> str:
+    """当前 Python 进程架构对应的 DLL 子目录（x64 / x86 / arm64）。
+
+    按进程位宽判断，而非系统架构：32 位 Python 运行在 64 位系统上时
+    platform.machine() 仍返回 AMD64（os.uname 模拟基于 GetNativeSystemInfo），
+    因此必须用指针宽度区分 x86 与 x64。
+    """
+    if ctypes.sizeof(ctypes.c_void_p) == 4:
+        return "x86"
+    machine = platform.machine().lower()
+    if machine in ("arm64", "aarch64"):
+        return "arm64"
+    return "x64"
+
+
 def _find_dll() -> str:
     package_dir = Path(__file__).parent
     dll_name = "fastscreen.dll"
+    arch = _arch_dir()
 
     search_paths = [
+        package_dir / arch / dll_name,
         package_dir / dll_name,
         package_dir / "bin" / dll_name,
-        package_dir / ".." / "build" / "bin" / "Release" / dll_name,
-        package_dir / ".." / "build" / "bin" / "Debug" / dll_name,
-        package_dir / ".." / "build" / "Release" / dll_name,
-        package_dir / ".." / "build" / "Debug" / dll_name,
     ]
 
+    # 按架构独立开发构建目录（build/<arch>/bin/Release/…）
     project_root = package_dir
     while project_root.parent != project_root:
         if (project_root / "CMakeLists.txt").exists():
-            search_paths.extend([
-                project_root / "build" / "bin" / "Release" / dll_name,
-                project_root / "build" / "bin" / "Debug" / dll_name,
-                project_root / "build" / "Release" / dll_name,
-                project_root / "build" / "Debug" / dll_name,
-            ])
+            for cfg in ("Release", "Debug"):
+                search_paths.extend([
+                    project_root / "build" / arch / "bin" / cfg / dll_name,
+                    project_root / "build" / arch / "bin" / dll_name,
+                    project_root / "build" / arch / cfg / dll_name,
+                    project_root / "build" / arch / dll_name,
+                ])
             break
         project_root = project_root.parent
 
@@ -99,8 +111,8 @@ def _find_dll() -> str:
             return str(p)
 
     raise FileNotFoundError(
-        f"Cannot find {dll_name}. Please build the C++ library first:\n"
-        f"  python build.py\n"
+        f"Cannot find {dll_name} for architecture {arch}. Please build the C++ library first:\n"
+        f"  python build.py --arch {arch}\n"
         f"Searched: {[str(p) for p in search_paths]}"
     )
 

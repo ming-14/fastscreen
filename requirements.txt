@@ -1,0 +1,4 @@
+# FastScreen 测试依赖
+# 运行时仅需标准库（ctypes）；numpy / PySide6 为 to_numpy() / to_qimage() 的可选依赖。
+pytest>=7.0
+pytest-timeout>=2.0
